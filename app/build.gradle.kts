@@ -49,7 +49,9 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+//    implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation ("androidx.localbroadcastmanager:localbroadcastmanager:1.0.0")
-    implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.media)
 
 }

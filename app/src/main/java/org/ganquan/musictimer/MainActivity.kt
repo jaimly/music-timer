@@ -10,6 +10,8 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.PowerManager
 import android.view.View
+import android.view.View.GONE
+import android.view.View.VISIBLE
 import android.view.WindowManager
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -20,14 +22,14 @@ import java.io.File
 
 class MainActivity : AppCompatActivity() {
     private val permission = Permission(this)
-    private val musicWorker: MusicWorker = MusicWorker(this)
+    private val oneTimeWorker: OneTimeWorker = OneTimeWorker(this)
     private var isReadPermission: Boolean = false
     private var isWakeLockPermission: Boolean = false
     private var selectMusicName:String = ""
     private lateinit var binding: ActivityMainBinding
-    private lateinit var powerManager:PowerManager
     private lateinit var wakeLock: PowerManager.WakeLock
     private lateinit var folderPath: String
+    private var customPlayTime = 10
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,7 +51,7 @@ class MainActivity : AppCompatActivity() {
                 isReadPermission = true
                 initMusicList()
             }
-            WRITE_EXTERNAL_STORAGE -> createFolder()
+            WRITE_EXTERNAL_STORAGE -> initFolder()
             WAKE_LOCK -> {
                 isWakeLockPermission = true
             }
@@ -58,11 +60,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        endTimer()
+        end()
     }
 
     private fun initView() {
-        powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag")
 
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -78,57 +80,62 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initPermission() {
-        createFolder(true)
+        initFolder(true)
         initMusicList()
         isWakeLockPermission = permission.check(WAKE_LOCK)
         if(!isReadPermission) binding.startBtn.text = getString(R.string.view_button_permission)
     }
 
+    @SuppressLint("SetTextI18n")
+    private fun initFolder(isCheck: Boolean = false) {
+        val name = getString(R.string.view_music_path_name)
+        val path = Utils.createFolder(name, Environment.DIRECTORY_MUSIC)
+        if(path == "") {
+            if(isCheck) {
+                val isWrite = permission.check(WRITE_EXTERNAL_STORAGE)
+                if (isWrite) initFolder()
+            } else {
+                folderPath = "${Environment.getExternalStorageDirectory()}/${Environment.DIRECTORY_MUSIC}"
+            }
+        } else {
+            binding.musicPath.text = "${getString(R.string.view_music_path)}/${name}"
+            folderPath = path
+        }
+    }
+
     private fun initListen() {
         binding.startBtn.setOnClickListener {
             when (binding.startBtn.text) {
-                getString(R.string.view_button_start) -> startTimer()
-                getString(R.string.view_button_end) -> endTimer()
+                getString(R.string.view_button_start) -> start()
+                getString(R.string.view_button_end) -> end()
                 getString(R.string.view_button_permission) -> initPermission()
             }
         }
 
         binding.startTime.setOnTimeChangedListener { _, h, m ->
-            endTimer()
+            end()
         }
 
         binding.playTime.setOnValueChangedListener { _, oldV, newV ->
-            endTimer()
+            if(binding.mode.checkedRadioButtonId == R.id.mode_custom) customPlayTime = newV
+            end()
         }
 
         binding.mode.setOnCheckedChangeListener { group, checkedId ->
-            val now = Utils.getTime()
-            binding.playTime.value = 10
-            when (checkedId) {
+            when (binding.mode.checkedRadioButtonId) {
                 R.id.mode_normal -> {
-                    binding.startTime.hour = if( now.hour < 12 ) 9 else 19
-                    binding.startTime.minute = 20
-                    binding.playTime.value = 10
-                    binding.modeCustomDetail.visibility = View.GONE
+                    binding.modeCustomDetail.visibility = GONE
                 }
                 R.id.mode_custom -> {
-                    binding.startTime.hour = now.hour
-                    binding.startTime.minute = now.minute
-                    binding.modeCustomDetail.visibility = View.VISIBLE
+                    setMode()
+                    binding.modeCustomDetail.visibility = VISIBLE
                 }
             }
-            endTimer()
+            end()
         }
         binding.mode.check(R.id.mode_normal)
 
-        Broadcast.receiveLocal (this) { msg -> broadcastReceiveHandler(msg)}
-    }
-
-    private fun broadcastReceiveHandler(msg: String) {
-        when (msg) {
-            "start worker" -> playing()
-            "end worker" -> restart()
-        }
+        Broadcast.receiveLocal (this) { msg, info -> broadcastReceiveHandler(msg, info) }
     }
 
     private fun initMusicList() {
@@ -143,7 +150,7 @@ class MainActivity : AppCompatActivity() {
         binding.startBtn.text = getString(R.string.view_button_start)
 
         val defaultName = getString(R.string.view_music_default)
-        var names = list.map { it.name }.toMutableList()
+        var names = list.map { it.nameWithoutExtension }.toMutableList()
         names.add(0, defaultName)
         val adapter = ArrayAdapter(this, R.layout.simple_spinner_item, names)
         adapter.setDropDownViewResource(R.layout.simple_spinner_dropdown_item)
@@ -153,18 +160,20 @@ class MainActivity : AppCompatActivity() {
             override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
                 selectMusicName = parent.getItemAtPosition(position).toString()
                 if(selectMusicName == defaultName) selectMusicName = ""
-                endTimer()
+                end()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>) {
                 selectMusicName = ""
-                endTimer()
+                end()
             }
         }
     }
 
     @SuppressLint("SetTextI18n")
-    private fun startTimer() {
+    private fun start() {
+        if(binding.mode.checkedRadioButtonId == R.id.mode_normal) setMode()
+
         val startTimeH = binding.startTime.hour
         val startTimeM = binding.startTime.minute
         val playTime = binding.playTime.value
@@ -182,50 +191,60 @@ class MainActivity : AppCompatActivity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             wakeLock.acquire((delay+playTime1+5)*1000L)
 
-            musicWorker.request(
+            val intent = initIntent()
+            intent.putExtra("folder_path", folderPath)
+            intent.putExtra("music_name", selectMusicName)
+            startForegroundService(intent)
+
+            oneTimeWorker.request(
                 playTime1,
-                delay,
-                folderPath.toString(),
-                selectMusicName
+                delay
             )
         }
     }
 
-    private fun endTimer() {
-        musicWorker.cancel()
+    private fun end() {
+        oneTimeWorker.cancel()
         restart()
     }
 
     private fun playing() {
-//        startMusic(folderPath.toString(), selectMusicName)
+        startForegroundService(initIntent("ACTION_PLAY"))
+
         binding.startBtn.isEnabled = true
         binding.startBtn.text = getString(R.string.view_button_end)
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private fun restart() {
-//        stopMusic()
+        Broadcast.destroyLocal(this) { msg,info -> broadcastReceiveHandler(msg,info)}
+        stopService(initIntent())
         binding.startBtn.isEnabled = true
         binding.startBtn.text = getString(R.string.view_button_start)
+        binding.musicName.visibility = GONE
+        binding.musicName.text = ""
         if(wakeLock.isHeld) wakeLock.release()
-        Broadcast.destroyLocal(this) { msg -> broadcastReceiveHandler(msg)}
     }
 
-    @SuppressLint("SetTextI18n")
-    private fun createFolder(isCheck: Boolean = false) {
-        val name = getString(R.string.view_music_path_name)
-        val path = Utils.createFolder(name, Environment.DIRECTORY_MUSIC)
-        if(path == "") {
-            if(isCheck) {
-                val isWrite = permission.check(WRITE_EXTERNAL_STORAGE)
-                if (isWrite) createFolder()
-            } else {
-                folderPath = "${Environment.getExternalStorageDirectory()}/${Environment.DIRECTORY_MUSIC}"
+    private fun setMode() {
+        val now = Utils.getTime()
+        when (binding.mode.checkedRadioButtonId) {
+            R.id.mode_normal -> {
+                binding.startTime.hour = if( now.hour < 12 ) 9 else 19
+                binding.startTime.minute = 20
+                binding.playTime.value = 10
             }
-        } else {
-            binding.musicPath.text = "${getString(R.string.view_music_path)}/${name}"
-            folderPath = path
+            R.id.mode_custom -> {
+                binding.startTime.hour = now.hour
+                binding.startTime.minute = now.minute
+                binding.playTime.value = customPlayTime
+            }
         }
+    }
+
+    private fun setMusicName(name: String = "") {
+        binding.musicName.text = name
+        if(selectMusicName == "") binding.musicName.visibility = VISIBLE
     }
 
     private fun getMusicList(): List<File>? {
@@ -240,15 +259,17 @@ class MainActivity : AppCompatActivity() {
         return null
     }
 
-    private fun startMusic(path: String, name: String="") {
-        val intent = Intent(this, MusicService::class.java)
-        intent.putExtra("file_path", path)
-        intent.putExtra("music_name", name)
-        startForegroundService(intent);
+    private fun broadcastReceiveHandler(msg: String, info: String) {
+        when (msg) {
+            "start worker" -> playing()
+            "end worker" -> restart()
+            "new music" -> setMusicName(info)
+        }
     }
 
-    private fun stopMusic() {
+    private fun initIntent(action: String = ""): Intent {
         val intent = Intent(this, MusicService::class.java)
-        stopService(intent)
+        if(action != "") intent.action = action
+        return intent
     }
 }
