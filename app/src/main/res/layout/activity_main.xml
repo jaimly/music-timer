@@ -76,24 +76,54 @@
                     android:layout_marginTop="8dp"
                     android:text="@string/view_time_mode" />
 
-                <RadioGroup
+                <org.ganquan.musictimer.comp.RadioGroup
                     android:id="@+id/mode"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <RadioButton
-                        android:id="@+id/mode_normal"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/view_mode_normal" />
+                    <LinearLayout
+                        android:id="@+id/linearLayout1"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
 
-                    <RadioButton
-                        android:id="@+id/mode_custom"
-                        android:layout_width="wrap_content"
+                        <RadioButton
+                            android:id="@+id/mode_normal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/view_mode_normal" >
+                        </RadioButton>
+
+                        <TextView
+                            android:id="@+id/normal_time_add"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="20dp"
+                            android:background="?android:attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:text="@string/view_time_btn_add"
+                            android:textColor="@color/blue"
+                            tools:ignore="ChildInNonViewGroup" />
+                    </LinearLayout>
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/view_mode_custom" />
-                </RadioGroup>
+                        android:orientation="vertical"
+                        android:id="@+id/normal_time_list"/>
+
+                    <LinearLayout
+                        android:id="@+id/linearLayout2"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+                        <RadioButton
+                            android:id="@+id/mode_custom"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/view_mode_custom" />
+                    </LinearLayout>
+                </org.ganquan.musictimer.comp.RadioGroup>
             </LinearLayout>
 
             <LinearLayout

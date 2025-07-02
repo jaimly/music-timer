@@ -17,7 +17,13 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import org.ganquan.musictimer.comp.RadioGroup
 import org.ganquan.musictimer.databinding.ActivityMainBinding
+import org.ganquan.musictimer.tools.Broadcast
+import org.ganquan.musictimer.tools.OneTimeWorker
+import org.ganquan.musictimer.tools.Permission
+import org.ganquan.musictimer.tools.Utils
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -30,6 +36,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var wakeLock: PowerManager.WakeLock
     private lateinit var folderPath: String
     private var customPlayTime = 10
+    private var normalTimeList: MutableList<List<Int>> =
+        mutableListOf(listOf(9,20,10), listOf(19,20,10))
+    private var startTimeHour = normalTimeList[0][0]
+    private var startTimeMunit: Int = normalTimeList[0][0]
+    private var playTime = normalTimeList[0][1]
+    private var isStart: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,13 +82,16 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        val normalTimeList1: MutableList<List<Int>> = Utils.sharedPrefer(this, "normalTimeList", "MutableList") as MutableList<List<Int>>
+        if(normalTimeList1.isNotEmpty()) normalTimeList = normalTimeList1.map { it.map { it.toInt() }} as MutableList<List<Int>>
+        binding.normalTimeList.layoutManager = LinearLayoutManager(this)
+        binding.normalTimeList.adapter = NormalTimeAdapter(normalTimeList)
         binding.startTime.setIs24HourView(true)
-        binding.startTime.hour = 9
-        binding.startTime.minute = 20
         binding.playTime.minValue = 1
         binding.playTime.maxValue = 120
-        binding.playTime.value = 10
+        binding.playTime.value = customPlayTime
         binding.startBtn.isEnabled = true
+        binding.mode.check(R.id.mode_normal)
     }
 
     private fun initPermission() {
@@ -109,31 +124,58 @@ class MainActivity : AppCompatActivity() {
                 getString(R.string.view_button_start) -> start()
                 getString(R.string.view_button_end) -> end()
                 getString(R.string.view_button_permission) -> initPermission()
+                getString(R.string.view_button_save) -> addNormalTime()
             }
         }
 
         binding.startTime.setOnTimeChangedListener { _, h, m ->
-            end()
+            if(isStart) end()
         }
 
         binding.playTime.setOnValueChangedListener { _, oldV, newV ->
             if(binding.mode.checkedRadioButtonId == R.id.mode_custom) customPlayTime = newV
-            end()
+            if(isStart) end()
         }
 
-        binding.mode.setOnCheckedChangeListener { group, checkedId ->
-            when (binding.mode.checkedRadioButtonId) {
-                R.id.mode_normal -> {
-                    binding.modeCustomDetail.visibility = GONE
-                }
-                R.id.mode_custom -> {
-                    setMode()
+        binding.normalTimeAdd.setOnClickListener {
+            if(isStart) end()
+            when (binding.normalTimeAdd.text) {
+                getString(R.string.view_time_btn_add) -> {
+                    setCustomTime(10)
                     binding.modeCustomDetail.visibility = VISIBLE
+                    binding.normalTimeAdd.text = getString(R.string.view_time_btn_cancel)
+                    binding.startBtn.text = getString(R.string.view_button_save)
+                    binding.modeCustom.visibility = GONE
+                }
+                getString(R.string.view_time_btn_cancel) -> {
+                    binding.modeCustomDetail.visibility = GONE
+                    binding.normalTimeAdd.text = getString(R.string.view_time_btn_add)
+                    binding.startBtn.text = getString(R.string.view_button_start)
+                    binding.modeCustom.visibility = VISIBLE
                 }
             }
-            end()
         }
-        binding.mode.check(R.id.mode_normal)
+
+        binding.mode.setOnCheckedChangeListener(object : RadioGroup.OnCheckedChangeListener {
+             override fun onCheckedChanged(group: RadioGroup?, checkedId: Int) {
+                 if(checkedId == binding.mode.checkedRadioButtonId) return
+                 binding.mode.check(checkedId)
+                 when (checkedId) {
+                     R.id.mode_normal -> {
+                         binding.normalTimeList.visibility = VISIBLE
+                         binding.normalTimeAdd.visibility = VISIBLE
+                         binding.modeCustomDetail.visibility = GONE
+                     }
+                     R.id.mode_custom -> {
+                         setCustomTime()
+                         binding.normalTimeList.visibility = GONE
+                         binding.normalTimeAdd.visibility = GONE
+                         binding.modeCustomDetail.visibility = VISIBLE
+                     }
+                 }
+                 end()
+             }
+        })
 
         Broadcast.receiveLocal (this) { msg, info -> broadcastReceiveHandler(msg, info) }
     }
@@ -172,20 +214,31 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun start() {
-        if(binding.mode.checkedRadioButtonId == R.id.mode_normal) setMode()
+        isStart = true
 
-        val startTimeH = binding.startTime.hour
-        val startTimeM = binding.startTime.minute
-        val playTime = binding.playTime.value
         val now = Utils.getTime()
-        val startMinuteCount = startTimeH * 60 + startTimeM
+        when (binding.mode.checkedRadioButtonId) {
+            R.id.mode_normal -> {
+                val list: List<Int>? = normalTimeList.find {it -> !isPass(it[0],it[1])}
+                startTimeHour = (list?.get(0)) ?: -1
+                startTimeMunit = (list?.get(1)) ?: 0
+                playTime = (list?.get(2)) ?: 0
+            }
+            R.id.mode_custom -> {
+                startTimeHour = binding.startTime.hour
+                startTimeMunit = binding.startTime.minute
+                playTime = binding.playTime.value
+            }
+        }
+
+        val startMinuteCount = startTimeHour * 60 + startTimeMunit
         val nowMinuteCount = now.hour * 60 + now.minute
 
         if (nowMinuteCount > startMinuteCount) {
             Toast.makeText(this, getString(R.string.toast_set_time), Toast.LENGTH_SHORT).show()
         } else {
             binding.startBtn.isEnabled = false
-            binding.startBtn.text = "${Utils.int2String(startTimeH)}:${Utils.int2String(startTimeM)} 开始播放"
+            binding.startBtn.text = "${Utils.int2String(startTimeHour)}:${Utils.int2String(startTimeMunit)} 开始播放"
             val delay = ((startMinuteCount - nowMinuteCount) * 60 - now.second).toLong()
             val playTime1 = (playTime * 60).toLong()
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -205,7 +258,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun end() {
         oneTimeWorker.cancel()
-        restart()
+        reSet()
     }
 
     private fun playing() {
@@ -216,35 +269,49 @@ class MainActivity : AppCompatActivity() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
-    private fun restart() {
-        Broadcast.destroyLocal(this) { msg,info -> broadcastReceiveHandler(msg,info)}
+    private fun reSet() {
+        Broadcast.destroyLocal(this) { msg, info -> broadcastReceiveHandler(msg,info)}
         stopService(initIntent())
         binding.startBtn.isEnabled = true
         binding.startBtn.text = getString(R.string.view_button_start)
+        binding.normalTimeAdd.text = getString(R.string.view_time_btn_add)
+        binding.modeCustom.visibility = VISIBLE
         binding.musicName.visibility = GONE
         binding.musicName.text = ""
         if(wakeLock.isHeld) wakeLock.release()
+        isStart = false
     }
 
-    private fun setMode() {
+    private fun setCustomTime(pTime: Int = 0) {
         val now = Utils.getTime()
-        when (binding.mode.checkedRadioButtonId) {
-            R.id.mode_normal -> {
-                binding.startTime.hour = if( now.hour < 12 ) 9 else 19
-                binding.startTime.minute = 20
-                binding.playTime.value = 10
-            }
-            R.id.mode_custom -> {
-                binding.startTime.hour = now.hour
-                binding.startTime.minute = now.minute
-                binding.playTime.value = customPlayTime
-            }
-        }
+        binding.startTime.hour = now.hour
+        binding.startTime.minute = now.minute
+        binding.playTime.value = pTime or customPlayTime
     }
 
     private fun setMusicName(name: String = "") {
         binding.musicName.text = name
         if(selectMusicName == "") binding.musicName.visibility = VISIBLE
+    }
+
+    private fun addNormalTime() {
+        if(normalTimeList.size >= 10) {
+            Toast.makeText(this, getString(R.string.toast_normal_time_limit), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val newList = listOf(
+            binding.startTime.hour,
+            binding.startTime.minute,
+            binding.playTime.value
+        )
+        val isExists = normalTimeList.find { it.containsAll(newList) }
+        if(isExists != null) {
+            Toast.makeText(this, getString(R.string.toast_normal_time_exists), Toast.LENGTH_SHORT).show()
+        } else {
+            normalTimeList.add(newList)
+            normalTimeList.sortWith(compareBy<List<Int>> { it[0] }.thenBy { it[1] })
+            binding.normalTimeList.adapter = NormalTimeAdapter(normalTimeList)
+        }
     }
 
     private fun getMusicList(): List<File>? {
@@ -262,7 +329,7 @@ class MainActivity : AppCompatActivity() {
     private fun broadcastReceiveHandler(msg: String, info: String) {
         when (msg) {
             "start worker" -> playing()
-            "end worker" -> restart()
+            "end worker" -> reSet()
             "new music" -> setMusicName(info)
         }
     }
@@ -271,5 +338,13 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, MusicService::class.java)
         if(action != "") intent.action = action
         return intent
+    }
+
+    private fun isPass(hour: Int, munit: Int): Boolean {
+        val now = Utils.getTime()
+        val startMinuteCount = hour * 60 + munit
+        val nowMinuteCount = now.hour * 60 + now.minute
+
+        return nowMinuteCount > startMinuteCount
     }
 }

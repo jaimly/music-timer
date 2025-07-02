@@ -7,6 +7,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Environment
+import org.ganquan.musictimer.tools.Broadcast
+import org.ganquan.musictimer.tools.Music
+import org.ganquan.musictimer.tools.Utils
 
 class MusicAlarm {
     private var activity: Context
