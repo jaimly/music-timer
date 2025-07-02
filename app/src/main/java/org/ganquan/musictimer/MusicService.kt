@@ -12,6 +12,8 @@ import android.media.MediaPlayer
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
+import org.ganquan.musictimer.tools.Broadcast
+import org.ganquan.musictimer.tools.Utils
 import java.io.File
 import kotlin.math.floor
 
@@ -75,7 +77,7 @@ class MusicService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Broadcast.destroyLocal(this) { msg,_ -> broadcastReceiveHandler(msg)}
+        Broadcast.destroyLocal(this) { msg, _ -> broadcastReceiveHandler(msg)}
         mediaPlayer.pause()
         mediaPlayer.stop()
         mediaPlayer.release()

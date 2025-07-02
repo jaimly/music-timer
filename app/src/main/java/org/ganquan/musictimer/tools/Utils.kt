@@ -1,6 +1,10 @@
-package org.ganquan.musictimer
+package org.ganquan.musictimer.tools
 
+import android.content.Context
 import android.os.Environment
+import androidx.core.content.edit
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -35,7 +39,8 @@ class Utils {
         }
 
         fun createFolder(folderName: String, parentFolderName: String): String {
-            val folder = File(Environment.getExternalStorageDirectory(),
+            val folder = File(
+                Environment.getExternalStorageDirectory(),
                 "$parentFolderName/$folderName"
             )
             if (folder.exists()) return folder.path
@@ -45,6 +50,25 @@ class Utils {
             } catch (e: Exception) {
                 println(e)
                 return ""
+            }
+        }
+
+        fun sharedPrefer(context: Context, key: String = "", value: Any? = null): Any? {
+            val sharedPref = context.getSharedPreferences(context.packageName, Context.MODE_PRIVATE)
+            if(key == "") return sharedPref.edit { clear() }
+            return when(value) {
+                null -> sharedPref.edit { remove(key) }
+                "MutableList" -> Gson().fromJson(sharedPref.getString(key, "[]"),
+                                        object : TypeToken<MutableList<*>>() {}.type)
+                String -> sharedPref.getString(key, null)
+                Int -> sharedPref.getInt(key, -1)
+                is String -> sharedPref.edit(commit = true) { putString(key, value) }
+                is Int -> sharedPref.edit(commit = true) { putInt(key, value) }
+                is MutableList<*> -> sharedPref.edit(commit = true) {
+                                        putString(key, Gson().toJson(value))
+                                    }
+
+                else -> null
             }
         }
     }

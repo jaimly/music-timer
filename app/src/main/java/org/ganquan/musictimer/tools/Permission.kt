@@ -1,9 +1,6 @@
-package org.ganquan.musictimer
+package org.ganquan.musictimer.tools
 
-import android.Manifest.permission.READ_EXTERNAL_STORAGE
-import android.Manifest.permission.READ_MEDIA_AUDIO
-import android.Manifest.permission.WAKE_LOCK
-import android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -12,6 +9,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import org.ganquan.musictimer.R
 
 private const val REQUEST_CODE_AUDIO = 1
 private const val REQUEST_CODE_WRITE = 2
@@ -33,17 +31,20 @@ class Permission {
         types.add(type)
 
         when (type) {
-            READ_MEDIA_AUDIO -> {
+            Manifest.permission.READ_MEDIA_AUDIO -> {
                 toastMsg = activity.getString(R.string.toast_permission_audio)
                 code = REQUEST_CODE_AUDIO
-                results.add(ContextCompat.checkSelfPermission(activity, READ_EXTERNAL_STORAGE))
-                types.add(READ_EXTERNAL_STORAGE)
+                results.add(
+                    ContextCompat.checkSelfPermission(activity,
+                        Manifest.permission.READ_EXTERNAL_STORAGE
+                    ))
+                types.add(Manifest.permission.READ_EXTERNAL_STORAGE)
             }
-            WRITE_EXTERNAL_STORAGE -> {
+            Manifest.permission.WRITE_EXTERNAL_STORAGE -> {
                 toastMsg = activity.getString(R.string.toast_permission_write)
                 code = REQUEST_CODE_WRITE
             }
-            WAKE_LOCK -> {
+            Manifest.permission.WAKE_LOCK -> {
                 toastMsg = activity.getString(R.string.toast_permission_wake_lock)
                 code = REQUEST_CODE_WAKE_LOCK
             }
