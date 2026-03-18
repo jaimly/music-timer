@@ -22,7 +22,7 @@
     <string name="view_mode_normal">常规</string>
     <string name="view_mode_custom">自定义</string>
     <string name="view_note_btn">去设置</string>
-    <string name="toast_set_time">开始时间须大于当前时间</string>
+    <string name="toast_set_time">播放时间为0</string>
     <string name="toast_no_music">请添加音乐到音乐目录</string>
     <string name="toast_normal_time_exists">开始时间不能重叠</string>
     <string name="toast_normal_time_limit">最多添加10条</string>

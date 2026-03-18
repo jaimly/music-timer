@@ -105,11 +105,13 @@ class MainActivity : AppCompatActivity() {
         val now = Time.get()
         when (binding.mode.checkedRadioButtonId) {
             R.id.mode_normal -> {
-                val info: NormalTimeInfo? = normalTimeList.find { it -> !Time.isPass(it.hour,it.minute)}
+                val info: NormalTimeInfo? =
+                    normalTimeList.find { it -> !Time.isPass(it.hour, it.minute) }
                 startTimeHour = (info?.hour) ?: -1
                 startTimeMunit = (info?.minute) ?: 0
                 playTime = (info?.time) ?: 0
             }
+
             R.id.mode_custom -> {
                 startTimeHour = binding.startTime.hour
                 startTimeMunit = binding.startTime.minute
@@ -119,9 +121,15 @@ class MainActivity : AppCompatActivity() {
 
         val startMinuteCount = startTimeHour * 60 + startTimeMunit
         val nowMinuteCount = now.hour * 60 + now.minute
-        val playTime2 = if(nowMinuteCount == startMinuteCount) playTime*60 - now.second else playTime*60
+        var playTime2 = if (nowMinuteCount == startMinuteCount) {
+            playTime * 60 - now.second
+        } else if (nowMinuteCount > startMinuteCount) {
+            (playTime - (nowMinuteCount - startMinuteCount)) * 60
+        } else {
+            playTime * 60
+        }
 
-        if (nowMinuteCount > startMinuteCount || playTime2 == 0) {
+        if (playTime2 <= 0) {
             Toast.makeText(this, getString(R.string.toast_set_time), Toast.LENGTH_SHORT).show()
         } else {
             isStart = true
